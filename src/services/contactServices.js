@@ -4,7 +4,7 @@ const { getTimestamp } = require("../helpers/utils");
 const identifyUser = async (payload) => {
     const { email, phoneNumber } = payload;
     const alreadyExists = await selectExistingContact(payload);
-    var updatedContactRecords, secondaryContactRecords, primaryContactId;
+    var updatedContactRecords, secondaryContactRecords, primaryContactId, phoneExists, emailExists;
     var keys = Object.keys(payload).toString();
     var values = Object.values(payload).map(value => `"${value}"`);
 
@@ -28,8 +28,15 @@ const identifyUser = async (payload) => {
 
                 if (secondaryContacts.length > 0) {
 
-                    const phoneExists = await selectContactUsingPhone(payload);
-                    const emailExists = await selectContactUsingEmail(payload);
+
+                    await Promise.all([
+                        selectContactUsingPhone(payload),
+                        selectContactUsingEmail(payload)
+                      ]).then(results => {
+                        phoneExists = results[0]
+                        emailExists = results[1]
+                      })
+                    
 
                     if (phoneExists.length == 0 || emailExists.length == 0) {
                         keys += ',linkedId,linkPrecedence';
@@ -62,10 +69,15 @@ const identifyUser = async (payload) => {
                 }
 
             } else {
-                primaryContactId = contactRecords[0].linkedId
+                primaryContactId = contactRecords[0].linkedId;
 
-                const phoneExists = await selectContactUsingPhone(payload);
-                const emailExists = await selectContactUsingEmail(payload);
+                await Promise.all([
+                    selectContactUsingPhone(payload),
+                    selectContactUsingEmail(payload)
+                  ]).then(results => {
+                    phoneExists = results[0]
+                    emailExists = results[1]
+                  })
 
 
                 if (phoneExists.length == 0 || emailExists.length == 0) {
@@ -94,8 +106,13 @@ const identifyUser = async (payload) => {
             primaryContactId = (await selectContactUsingPhoneEmail(payload))[0].id;
         }
 
-        updatedContactRecords = await selectContactUsingPhoneEmail(payload);
-        secondaryContactRecords = await selectSecondaryContactUsingId(primaryContactId);
+        await Promise.all([
+            selectContactUsingPhoneEmail(payload),
+            selectSecondaryContactUsingId(primaryContactId)
+        ]).then(results => {
+            updatedContactRecords = results[0]
+            secondaryContactRecords = results[1]
+        })
 
     } else if (phoneNumber) {
 
