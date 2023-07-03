@@ -2,6 +2,9 @@ const express = require('express');
 const { identifyUser } = require('../services/contactServices');
 const router = express.Router()
 
+router.get("/", async (req, res) => {
+    res.send(`Please visit /api/v1/identify to access the identity reconcilation check`);
+})
 
 router.post("/api/v1/identify", async (req,res) => {
     const requestBody = req.body;
