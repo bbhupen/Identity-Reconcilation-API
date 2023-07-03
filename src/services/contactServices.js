@@ -1,53 +1,149 @@
-const { selectContactUsingPhoneEmail, createContactRecord } = require("../data_access/contactRepo");
+const { selectContactUsingPhoneEmail, selectContactUsingPhone, selectContactUsingEmail, createContactRecord, updateContactUsingId, selectExistingContact, selectSecondaryContactUsingId, selectContactUsingId } = require("../data_access/contactRepo");
+const { getTimestamp } = require("../helpers/utils");
 
-const identifyUser = async(payload) => {
-    try {
-        const mandateKeys = ["email", "phoneNumber"];
-        const hasRequiredFields = mandateKeys.every(keys => payload.hasOwnProperty(keys));
-        if(!hasRequiredFields) {
-            return {
-                "message": "req.body doesn't have the valid parameters"
-            }
+const identifyUser = async (payload) => {
+    const { email, phoneNumber } = payload;
+    const alreadyExists = await selectExistingContact(payload);
+    var updatedContactRecords, secondaryContactRecords, primaryContactId;
+    var keys = Object.keys(payload).toString();
+    var values = Object.values(payload).map(value => `"${value}"`);
+
+
+    if (alreadyExists.length) {
+        return {
+            "message": "contact with the exact same email and phoneNumber already exists"
         }
+    }
 
-        var keys = Object.keys(payload).toString();
-        var values = Object.values(payload).map(value => `"${value}"`);
-        
+    if (email && phoneNumber) {
         const contactRecords = await selectContactUsingPhoneEmail(payload);
 
-        
-        if (!contactRecords.length) {                   //when contact doesn't exists
-        
-            createdContact = await createContactRecord(keys, values);
 
-            return {
-                "contact": "created"                    //format output pending
+        if (contactRecords.length > 0) {
+
+            if (contactRecords[0].linkPrecedence == "primary") {
+                primaryContactId = contactRecords[0].id;
+                const secondaryContacts = contactRecords.slice(1);
+
+
+                if (secondaryContacts.length > 0) {
+
+                    const phoneExists = await selectContactUsingPhone(payload);
+                    const emailExists = await selectContactUsingEmail(payload);
+
+                    if (phoneExists.length == 0 || emailExists.length == 0) {
+                        keys += ',linkedId,linkPrecedence';
+                        values.push(`"${primaryContactId}", "secondary"`);
+
+                        await createContactRecord(keys, values);
+
+                    } else {
+
+                        const data = {
+                            "linkedId": primaryContactId,
+                            "linkPrecedence": "secondary",
+                            "updatedAt": getTimestamp()
+                        };
+
+
+                        for (const contact of secondaryContacts) {
+                            await updateContactUsingId(data, contact.id);
+                        }
+                    }
+
+                } else {
+
+                    keys += ',linkedId,linkPrecedence';
+                    values.push(`"${primaryContactId}", "secondary"`);
+
+                    await createContactRecord(keys, values);
+
+
+                }
+
+            } else {
+                primaryContactId = contactRecords[0].linkedId
+
+                const phoneExists = await selectContactUsingPhone(payload);
+                const emailExists = await selectContactUsingEmail(payload);
+
+
+                if (phoneExists.length == 0 || emailExists.length == 0) {
+                    keys += ',linkedId,linkPrecedence';
+                    values.push(`"${contactRecords[0].linkedId}", "secondary"`);
+
+                    await createContactRecord(keys, values);
+
+                } else {
+
+                    const data = {
+                        "linkedId": primaryContactId,
+                        "linkPrecedence": "secondary",
+                        "updatedAt": getTimestamp()
+                    };
+
+
+                    for (const contact of secondaryContacts) {
+                        await updateContactUsingId(data, contact.id);
+                    }
+                }
             }
-            
-        } else if (contactRecords.length == 1) {        //when contact already exists but only have either email or phoneNumber as the match
 
-            keys += ',linkedId,linkPrecedence';
-            values.push(`"${contactRecords[0].id}", "secondary"`);
-
-            createdContact = await createContactRecord(keys, values);
-
-            return {
-                "contact": "secondary created"          //format output pending
-            }
-        } 
-
-        //when contact already exists but both email or phoneNumber matches
-
-        const result= "success";
-
-        return {
-            "contact": result
+        } else {
+            await createContactRecord(keys, values);
+            primaryContactId = (await selectContactUsingPhoneEmail(payload))[0].id;
         }
 
-    } catch (error) {
-        console.log(error)
+        updatedContactRecords = await selectContactUsingPhoneEmail(payload);
+        secondaryContactRecords = await selectSecondaryContactUsingId(primaryContactId);
+
+    } else if (phoneNumber) {
+
+        updatedContactRecords = await selectContactUsingPhone(payload);
+
+        if (updatedContactRecords[0].linkPrecedence == "primary") {
+            primaryContactId = updatedContactRecords[0].id;
+            secondaryContactRecords = await selectSecondaryContactUsingId(primaryContactId);
+
+        } else {
+            const primaryContact = await selectContactUsingId(updatedContactRecords[0].linkedId);
+            primaryContactId = primaryContact[0].id;
+            updatedContactRecords[0] = primaryContact[0];
+            secondaryContactRecords = await selectSecondaryContactUsingId(primaryContactId);
+        }
+
+    } else if (email) {
+        updatedContactRecords = await selectContactUsingEmail(payload);
+
+        if (updatedContactRecords[0].linkPrecedence == "primary") {
+            primaryContactId = updatedContactRecords[0].id;
+            secondaryContactRecords = await selectSecondaryContactUsingId(primaryContactId);
+
+        } else {
+            const primaryContact = await selectContactUsingId(updatedContactRecords[0].linkedId);
+            primaryContactId = primaryContact[0].id;
+            updatedContactRecords[0] = primaryContact[0];
+            secondaryContactRecords = await selectSecondaryContactUsingId(primaryContactId);
+        }
     }
+
+
+    const response = {
+        "primaryContactId": primaryContactId,
+        "emails": [...new Set([...updatedContactRecords.map((record) => record.email), ...(secondaryContactRecords || []).map((record) => record.email)])],
+        "phoneNumbers": [...new Set([...updatedContactRecords.map((record) => record.phoneNumber), ...(secondaryContactRecords || []).map((record) => record.phoneNumber)])],
+        "secondaryContactIds": [...new Set([...updatedContactRecords.slice(1).map((record) => record.id), ...(secondaryContactRecords || []).map((record) => record.id)])]
+    };
+
+
+    return {
+        "contact": {
+            response
+        }
+    }
+
 }
+
 
 module.exports = {
     identifyUser
