@@ -131,7 +131,7 @@ The endpoint returns an HTTP 200 response with a JSON payload containing the req
 	}
 ```
 
-Download and import the [Post Man collection](src/helpers/bitespeed.postman_collection) into Postman for easy access.
+Download and import this [Example Postman collection](src/helpers/bitespeed.postman_collection) into Postman for easy access.
 
 ## Examples
 
