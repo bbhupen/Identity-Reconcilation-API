@@ -4,7 +4,6 @@ An API to identify and keep track of a customer's identity across multiple purch
 
 To test the API visit this link https://brainy-bell-bottoms-ray.cyclic.app/api/v1/identify and navigate to [API Documentation](#api-documentation) for documentation regarding API usage.
 
-**Please check my resume here [CV2023.pdf](CV2023.pdf)**
 
 ## Table of Contents
 
